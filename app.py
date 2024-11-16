@@ -66,41 +66,272 @@ HTML_TEMPLATE = '''
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Chat</title>
+    <title>AI Chat Assistant</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        #chat-container { display: flex; height: 100vh; }
-        #character-container { flex: 1; background-color: #f0f0f0; }
+        * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box; 
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background: linear-gradient(120deg, #f6f7f9 0%, #e9eef5 100%);
+            min-height: 100vh;
+        }
+
+        #chat-container { 
+            display: flex; 
+            height: 100vh;
+            max-width: 1600px;
+            margin: 0 auto;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.08);
+            border-radius: 24px;
+            overflow: hidden;
+            background: #ffffff;
+        }
+
+        #character-container { 
+            flex: 1.4;
+            background: linear-gradient(145deg, #ffffff 0%, #f8fafd 100%);
+            position: relative;
+            margin: 0;
+            padding: 0;
+        }
+
         #chat-interface {
-            width: 300px;
-            padding: 20px;
-            background-color: #ffffff;
+            width: 450px;
+            padding: 32px;
+            background: #ffffff;
             display: flex;
             flex-direction: column;
-            box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+            box-shadow: -5px 0 25px rgba(0,0,0,0.03);
+            margin: 0;
         }
+
+        #chat-header {
+            padding-bottom: 24px;
+            border-bottom: 2px solid #f0f2f5;
+            margin-bottom: 24px;
+        }
+
+        #chat-header h1 {
+            font-size: 28px;
+            color: #1a1f36;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        #chat-header p {
+            font-size: 15px;
+            color: #64748b;
+            line-height: 1.5;
+        }
+
         #chat-messages {
             flex: 1;
             overflow-y: auto;
-            margin-bottom: 20px;
-            padding: 10px;
+            padding: 10px 5px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
         }
+
+        .message {
+            max-width: 85%;
+            padding: 14px 18px;
+            border-radius: 16px;
+            font-size: 15px;
+            line-height: 1.5;
+            position: relative;
+            transition: transform 0.2s ease;
+        }
+
+        .message:hover {
+            transform: translateY(-1px);
+        }
+
+        .user-message {
+            background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.1);
+        }
+
+        .ai-message {
+            background: #f8fafc;
+            color: #1e293b;
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+        }
+
+        #input-container {
+            margin-top: 24px;
+            position: relative;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            width: 100%;
+        }
+
         #user-input {
-            padding: 10px;
-            margin-bottom: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+            flex: 1;
+            padding: 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 16px;
+            font-size: 15px;
+            transition: all 0.3s ease;
+            outline: none;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.02);
+            min-width: 0; /* Prevents input from overflowing */
         }
+
         #send-button {
-            padding: 10px;
-            background-color: #007bff;
+            padding: 16px 24px;
+            background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
             color: white;
             border: none;
-            border-radius: 4px;
+            border-radius: 16px;
             cursor: pointer;
+            font-weight: 500;
+            font-size: 15px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.1);
+            white-space: nowrap;
+        }
+
+        #mic-button {
+            padding: 16px 24px;
+            background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+            color: white;
+            border: none;
+            border-radius: 16px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 15px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.1);
+            white-space: nowrap;
+        }
+
+        /* Updated responsive styles */
+        @media (max-width: 600px) {
+            #input-container {
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+
+            #user-input {
+                width: 100%;
+                flex: 100%;
+            }
+
+            #send-button, #mic-button {
+                flex: 1;
+                padding: 16px 12px;
+                font-size: 14px;
+            }
+        }
+
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+            transition: background 0.3s ease;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* Loading Animation */
+        .loading {
+            display: inline-flex;
+            gap: 4px;
+            margin-left: 8px;
+        }
+
+        .loading span {
+            width: 6px;
+            height: 6px;
+            background-color: #3b82f6;
+            border-radius: 50%;
+            animation: bounce 0.5s infinite alternate;
+        }
+
+        .loading span:nth-child(2) { animation-delay: 0.15s; }
+        .loading span:nth-child(3) { animation-delay: 0.3s; }
+
+        @keyframes bounce {
+            to { transform: translateY(-4px); }
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1200px) {
+            #chat-container {
+                border-radius: 0;
+                height: 100vh;
+            }
+
+            #character-container {
+                flex: 1;
+            }
+
+            #chat-interface {
+                width: 400px;
+            }
+        }
+
+        @media (max-width: 900px) {
+            #chat-container {
+                flex-direction: column;
+            }
+
+            #character-container {
+                height: 40vh;
+            }
+
+            #chat-interface {
+                width: 100%;
+                height: 60vh;
+            }
+        }
+
+        @media (max-width: 600px) {
+            #chat-interface {
+                padding: 20px;
+            }
+
+            #chat-header h1 {
+                font-size: 24px;
+            }
+
+            .message {
+                max-width: 90%;
+                padding: 12px 16px;
+            }
+
+            #speak-button {
+                bottom: 20px;
+                right: 20px;
+                width: 54px;
+                height: 54px;
+            }
         }
     </style>
     <link rel="shortcut icon" href="#">
@@ -109,9 +340,16 @@ HTML_TEMPLATE = '''
     <div id="chat-container">
         <div id="character-container"></div>
         <div id="chat-interface">
+            <div id="chat-header">
+                <h1>AI Assistant</h1>
+                <p>Ask me anything in Hindi or English</p>
+            </div>
             <div id="chat-messages"></div>
-            <input type="text" id="user-input" placeholder="Type your message...">
-            <button id="send-button">Send</button>
+            <div id="input-container">
+                <input type="text" id="user-input" placeholder="Type your message...">
+                <button id="send-button">Send</button>
+                <button id="mic-button">🎤 Hold to Speak</button>
+            </div>
         </div>
     </div>
 
@@ -120,16 +358,30 @@ HTML_TEMPLATE = '''
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0xf0f0f0);
 
-        // Camera setup specifically for half-body framing
-        const camera = new THREE.PerspectiveCamera(35, window.innerWidth / 2 / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 1.6, 2.5); // Positioned for half-body view
+        // Get the character container dimensions
+        const container = document.getElementById('character-container');
+        const containerWidth = container.clientWidth;
+        const containerHeight = container.clientHeight;
 
-        // Renderer setup
+        // Camera setup specifically for half-body framing
+        const camera = new THREE.PerspectiveCamera(35, containerWidth / containerHeight, 0.1, 1000);
+        camera.position.set(0, 1.6, 2.5);
+
+        // Renderer setup - match container size exactly
         const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth / 2, window.innerHeight);
+        renderer.setSize(containerWidth, containerHeight);
         renderer.shadowMap.enabled = true;
         renderer.outputEncoding = THREE.sRGBEncoding;
         document.getElementById('character-container').appendChild(renderer.domElement);
+
+        // Add resize handler to keep canvas matched to container
+        window.addEventListener('resize', () => {
+            const newWidth = container.clientWidth;
+            const newHeight = container.clientHeight;
+            camera.aspect = newWidth / newHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(newWidth, newHeight);
+        });
 
         // Restricted controls for better framing
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -620,12 +872,20 @@ HTML_TEMPLATE = '''
         const sendButton = document.getElementById('send-button');
         const messagesContainer = document.getElementById('chat-messages');
 
+        function addMessage(text, isUser) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user-message' : 'ai-message'}`;
+            messageDiv.textContent = text;
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        // Update your sendMessage function to use the new addMessage function
         async function sendMessage() {
             const message = input.value.trim();
             if (message) {
-                const messageDiv = document.createElement('div');
-                messageDiv.textContent = 'User: ' + message;
-                messagesContainer.appendChild(messageDiv);
+                // Add user message
+                addMessage(message, true);
                 
                 // Disable input while processing
                 input.disabled = true;
@@ -643,16 +903,13 @@ HTML_TEMPLATE = '''
                     const data = await response.json();
                     const aiResponse = data.response;
                     
-                    const aiMessageDiv = document.createElement('div');
-                    aiMessageDiv.textContent = 'AI: ' + aiResponse;
-                    messagesContainer.appendChild(aiMessageDiv);
+                    // Add AI message
+                    addMessage(aiResponse, false);
                     
                     await speak(aiResponse);
                 } catch (error) {
                     console.error('Error:', error);
-                    const errorDiv = document.createElement('div');
-                    errorDiv.textContent = 'Error: Failed to get response';
-                    messagesContainer.appendChild(errorDiv);
+                    addMessage('Error: Failed to get response', false);
                 }
 
                 // Re-enable input
@@ -896,24 +1153,9 @@ HTML_TEMPLATE = '''
             };
         }
 
-        // Add this near your other UI-related code
+        // Update the voice input setup function
         function setupVoiceInput() {
-            const micButton = document.createElement('button');
-            micButton.innerHTML = '🎤 Hold to Speak';
-            micButton.style.cssText = `
-                position: fixed;
-                bottom: 20px;
-                right: 20px;
-                padding: 15px 25px;
-                font-size: 16px;
-                background-color: #4CAF50;
-                color: white;
-                border: none;
-                border-radius: 25px;
-                cursor: pointer;
-                transition: background-color 0.3s;
-            `;
-            document.body.appendChild(micButton);
+            const micButton = document.getElementById('mic-button'); // Changed to use the inline button
 
             // Speech recognition setup
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -939,7 +1181,6 @@ HTML_TEMPLATE = '''
                     }
                 }
                 
-                // Update the input field with the transcript
                 document.getElementById('user-input').value = currentTranscript;
             };
 
@@ -961,10 +1202,9 @@ HTML_TEMPLATE = '''
                 if (isListening) {
                     isListening = false;
                     recognition.stop();
-                    micButton.style.backgroundColor = '#4CAF50';
+                    micButton.style.background = 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)';
                     micButton.innerHTML = '🎤 Hold to Speak';
 
-                    // If we have a transcript, send it
                     if (currentTranscript.trim()) {
                         document.getElementById('user-input').value = currentTranscript;
                         sendMessage();
