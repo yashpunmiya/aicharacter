@@ -362,26 +362,6 @@ HTML_TEMPLATE = '''
             <div id="chat-header">
                 <h1>AI Assistant</h1>
                 <p>Ask me anything in Hindi or English</p>
-                <div style="display: flex; gap: 10px; align-items: center; margin-top: 10px;">
-                    <button id="test-animation-btn" style="
-                        padding: 8px 16px;
-                        background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
-                        color: white;
-                        border: none;
-                        border-radius: 8px;
-                        cursor: pointer;
-                        font-size: 14px;">
-                        Test Animations
-                    </button>
-                    <span id="current-animation" style="
-                        font-size: 14px;
-                        color: #64748b;
-                        padding: 4px 8px;
-                        background: #f1f5f9;
-                        border-radius: 4px;">
-                        No animation playing
-                    </span>
-                </div>
             </div>
             <div id="chat-messages"></div>
             <div id="input-container">
@@ -666,8 +646,6 @@ HTML_TEMPLATE = '''
                 camera.position.set(center.x, center.y + 0.5, center.z + 2);
                 controls.update();
 
-                setupAnimationTesting();
-                
                 animate();
             }
         );
@@ -1332,33 +1310,6 @@ HTML_TEMPLATE = '''
             setupVoiceInput();
             console.log('Voice input setup completed');
         });
-
-        // Add this after your setupArmMovements function
-        function setupAnimationTesting() {
-            const testButton = document.getElementById('test-animation-btn');
-            const animationDisplay = document.getElementById('current-animation');
-            
-            testButton.addEventListener('click', () => {
-                // Toggle speaking state
-                isSpeaking = !isSpeaking;
-                
-                if (isSpeaking) {
-                    testButton.textContent = 'Stop Animations';
-                    testButton.style.background = '#ef4444'; // Red background when active
-                } else {
-                    testButton.textContent = 'Test Animations';
-                    testButton.style.background = 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)';
-                }
-            });
-
-            // Add keyboard shortcut (spacebar)
-            document.addEventListener('keydown', (e) => {
-                if (e.code === 'Space' && !document.activeElement.tagName.toLowerCase().match(/input|textarea/)) {
-                    e.preventDefault(); // Prevent scrolling
-                    testButton.click();
-                }
-            });
-        }
     </script>
 </body>
 </html>
