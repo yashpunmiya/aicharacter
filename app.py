@@ -21,7 +21,7 @@ def text_to_speech():
         text = request.json.get('text', '')
         
         # ElevenLabs API endpoint (using "Josh" voice - you can change this ID)
-        VOICE_ID = "onwK4e9ZLuTAKqWW03F9"  # Josh voice ID
+        VOICE_ID = "CwhRBWXzGAHq8TQ4Fs17"  # Josh voice ID
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{VOICE_ID}"
         
         headers = {
@@ -32,7 +32,7 @@ def text_to_speech():
         
         data = {
             "text": text,
-            "model_id": "eleven_monolingual_v1",
+            "model_id": "eleven_multilingual_v2",
             "voice_settings": {
                 "stability": 0.5,
                 "similarity_boost": 0.5
@@ -1013,16 +1013,18 @@ def get_response():
                 generation_config=generation_config
             )
 
-            context = f"You are a helpful AI assistant. Keep your responses concise and natural, as they will be spoken by a 3D character. Respond to the following query: {user_input}"
+            # Updated context to request Hindi responses
+            context = f"""You are a helpful AI assistant. Keep your responses concise and natural, as they will be spoken by a 3D character. 
+            Please respond in Hindi (using Devanagari script) to the following query: {user_input}"""
             
             response = model.generate_content(context)
-            response_text = response.text if response else "I apologize, but I couldn't generate a response."
+            response_text = response.text if response else "मैं क्षमा चाहता हूं, लेकिन मैं जवाब नहीं दे पाया।"
             
             return {"response": response_text}
         except Exception as e:
-            return {"response": f"I apologize, but an error occurred: {str(e)}"}
+            return {"response": f"क्षमा करें, एक त्रुटि हुई: {str(e)}"}
     
-    return {"response": "I didn't receive any input. Could you please try again?"}
+    return {"response": "मुझे कोई इनपुट नहीं मिला। कृपया फिर से प्रयास करें।"}
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
