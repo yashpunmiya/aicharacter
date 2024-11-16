@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import requests
 import json
 
+print("Loading environment variables...")
 load_dotenv()
 
 app = Flask(__name__)
@@ -14,12 +15,19 @@ app.secret_key = 'your_secret_key'
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 ELEVEN_LABS_API_KEY = os.getenv("ELEVEN_LABS_API_KEY")
 
+print(f"ELEVEN_LABS_API_KEY configured: {'yes' if ELEVEN_LABS_API_KEY else 'no'}")
+
 # Add this new route for text-to-speech
 @app.route('/text-to-speech', methods=['POST'])
 def text_to_speech():
     try:
         text = request.json.get('text', '')
-        
+        if not text:
+            return jsonify({"error": "No text provided"}), 400
+            
+        if not ELEVEN_LABS_API_KEY:
+            return jsonify({"error": "ElevenLabs API key not configured"}), 500
+
         # ElevenLabs API endpoint (using "Josh" voice - you can change this ID)
         VOICE_ID = "CwhRBWXzGAHq8TQ4Fs17"  # Josh voice ID
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{VOICE_ID}"
@@ -39,18 +47,29 @@ def text_to_speech():
             }
         }
 
+        print(f"Sending request to ElevenLabs API: {url}")  # Debug log
         response = requests.post(url, json=data, headers=headers)
         
-        if response.status_code == 200:
-            # Convert audio data to base64
-            import base64
-            audio_base64 = base64.b64encode(response.content).decode('utf-8')
-            return jsonify({"audio": audio_base64})
-        else:
-            return jsonify({"error": "Failed to generate speech"}), 500
+        if response.status_code != 200:
+            print(f"ElevenLabs API error: {response.status_code} - {response.text}")  # Debug log
+            return jsonify({
+                "error": f"ElevenLabs API error: {response.status_code}",
+                "details": response.text
+            }), 500
+
+        # Convert audio data to base64
+        import base64
+        audio_base64 = base64.b64encode(response.content).decode('utf-8')
+        return jsonify({"audio": audio_base64})
             
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        import traceback
+        print(f"Error in text-to-speech: {str(e)}")  # Debug log
+        print(traceback.format_exc())  # Print full stack trace
+        return jsonify({
+            "error": str(e),
+            "stack_trace": traceback.format_exc()
+        }), 500
 
 # Generation settings for Gemini
 generation_config = {
@@ -343,6 +362,26 @@ HTML_TEMPLATE = '''
             <div id="chat-header">
                 <h1>AI Assistant</h1>
                 <p>Ask me anything in Hindi or English</p>
+                <div style="display: flex; gap: 10px; align-items: center; margin-top: 10px;">
+                    <button id="test-animation-btn" style="
+                        padding: 8px 16px;
+                        background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+                        color: white;
+                        border: none;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        font-size: 14px;">
+                        Test Animations
+                    </button>
+                    <span id="current-animation" style="
+                        font-size: 14px;
+                        color: #64748b;
+                        padding: 4px 8px;
+                        background: #f1f5f9;
+                        border-radius: 4px;">
+                        No animation playing
+                    </span>
+                </div>
             </div>
             <div id="chat-messages"></div>
             <div id="input-container">
@@ -627,6 +666,8 @@ HTML_TEMPLATE = '''
                 camera.position.set(center.x, center.y + 0.5, center.z + 2);
                 controls.update();
 
+                setupAnimationTesting();
+                
                 animate();
             }
         );
@@ -1014,134 +1055,146 @@ HTML_TEMPLATE = '''
                 }
             });
 
-            // Base position (arms straight down)
-            const basePosition = {
-                arm: { x: 1.4, y: 0, z: 0.1 },
-                foreArm: { x: 0, y: 0, z: 0 },
-                hand: { x: 0, y: 0, z: 0 }
+            // Neutral position (keep this as reference) hands are staright down
+            const neutralPosition = {
+                leftArm: { x: 1.3, y: 0.1, z: 0.1 },
+                rightArm: { x: 1.3, y: 0.1, z: -0.1 },
+                leftForeArm: { x: 0.1, y: 0, z: 0 },
+                rightForeArm: { x: 0.1, y: 0, z: 0 },
+                leftHand: { x: 0, y: 0, z: 0 },
+                rightHand: { x: 0, y: 0, z: 0 },
+                duration: 1200
             };
 
-            // Explaining gestures for forearms with wrist movements
-            const gestures = [
-                // Neutral
-                {
-                    leftForeArm: { x: 0, y: 0, z: 1.40 },
-                    rightForeArm: { x: 0, y: 0.0, z:-1.4 },
-                    rightHand: { x: 0, y: 0, z: 0 },
-                    duration: 1000
-                },
-                // Right arm explaining gesture with wrist emphasis
-                {
-                    leftForeArm: { x: 0, y: 0, z: 1.40 },
-                    rightForeArm: { x: 0, y: 0.3, z:-1.4 },
-                    rightHand: { x: 0.2, y: 0, z: 0 },
-                    duration: 1500
-                },
-                // Both arms subtle gesture
-                {
-                    leftForeArm: { x: 0, y: -0.2, z: 1.40 },
-                    rightForeArm: { x: 0, y: 0.2, z:-1.4 },
-                    rightHand: { x: -0.2, y: 0, z: 0 },
-                    duration: 1800
-                }
-            ];
+            // Predefined empty gesture arrays for different animations
+            const gestureArrays = {
+                explaining: [{
+        leftArm: { x: 1.2, y: 0.2, z: 0.3 },
+        rightArm: { x: 1.2, y: -0.2, z: -0.3 },
+        leftForeArm: { x: 0.1, y: 0, z: 0.1 },
+        rightForeArm: { x: 0.1, y: 0, z: -0.1 },
+        leftHand: { x: 0, y: 0.1, z: 0 },
+        rightHand: { x: 0, y: 0.1, z: 0 },
+        duration: 1500
+    }],
 
-            let currentGesture = 0;
+    presenting: [{
+        leftArm: { x: 0.9, y: 0.4, z: 0.4 },
+        rightArm: { x: 0.9, y: 0.4, z: -0.4 },
+        leftForeArm: { x: 0.3, y: 0.3, z: 0.2 },
+        rightForeArm: { x: 0.3, y: 0.3, z: -0.2 },
+        leftHand: { x: 0.2, y: 0.4, z: 0.1 },
+        rightHand: { x: 0.2, y: 0.4, z: -0.1 },
+        duration: 1400
+    }],
+
+    explainRight: [{
+        leftArm: { x: 1.4, y: 0, z: 0 },
+        rightArm: { x: 1.1, y: 0.3, z: -0.4 },
+        leftForeArm: { x: 0, y: 0, z: 0 },
+        rightForeArm: { x: 0.2, y: 0.2, z: -0.1 },
+        leftHand: { x: 0, y: 0, z: 0 },
+        rightHand: { x: 0.1, y: 0.2, z: 0 },
+        duration: 1300
+    }],
+
+    explainLeft: [{
+        leftArm: { x: 1.1, y: 0.3, z: 0.4 },
+        rightArm: { x: 1.4, y: 0, z: 0 },
+        leftForeArm: { x: 0.2, y: 0.2, z: 0.1 },
+        rightForeArm: { x: 0, y: 0, z: 0 },
+        leftHand: { x: 0.1, y: 0.2, z: 0 },
+        rightHand: { x: 0, y: 0, z: 0 },
+        duration: 1300
+    }],
+
+    presentLow: [{
+        leftArm: { x: 0.8, y: 0.3, z: 0.3 },
+        rightArm: { x: 0.8, y: 0.3, z: -0.3 },
+        leftForeArm: { x: 0.2, y: 0.2, z: 0.1 },
+        rightForeArm: { x: 0.2, y: 0.2, z: -0.1 },
+        leftHand: { x: 0.1, y: 0.3, z: 0.1 },
+        rightHand: { x: 0.1, y: 0.3, z: -0.1 },
+        duration: 1400
+    }],
+
+    presentHigh: [{
+        leftArm: { x: 1.0, y: 0.5, z: 0.4 },
+        rightArm: { x: 1.0, y: 0.5, z: -0.4 },
+        leftForeArm: { x: 0.4, y: 0.4, z: 0.2 },
+        rightForeArm: { x: 0.4, y: 0.4, z: -0.2 },
+        leftHand: { x: 0.3, y: 0.5, z: 0.1 },
+        rightHand: { x: 0.3, y: 0.5, z: -0.1 },
+        duration: 1400
+    }]
+
+            };
+
             let lastGestureTime = Date.now();
-            let transitionProgress = 0;
-            let currentTarget = { ...gestures[0] };
-            let previousTarget = { ...gestures[0] };
+            let currentGestureCategory = 'explaining';
+            let usedGestures = new Set();
 
             function updateArmMovements() {
                 if (!isSpeaking) {
-                    // Return all arm parts to base position when not speaking
+                    // Return to neutral position when not speaking
                     if (leftArm && rightArm && leftForeArm && rightForeArm && leftHand && rightHand) {
-                        // Set arms straight down with smooth transition
-                        leftArm.rotation.x = THREE.MathUtils.lerp(leftArm.rotation.x, basePosition.arm.x, 0.1);
-                        leftArm.rotation.y = THREE.MathUtils.lerp(leftArm.rotation.y, basePosition.arm.y, 0.1);
-                        leftArm.rotation.z = THREE.MathUtils.lerp(leftArm.rotation.z, basePosition.arm.z, 0.1);
-                        
-                        rightArm.rotation.x = THREE.MathUtils.lerp(rightArm.rotation.x, basePosition.arm.x, 0.1);
-                        rightArm.rotation.y = THREE.MathUtils.lerp(rightArm.rotation.y, basePosition.arm.y, 0.1);
-                        rightArm.rotation.z = THREE.MathUtils.lerp(rightArm.rotation.z, basePosition.arm.z, 0.1);
-                        
-                        // Reset forearms
-                        leftForeArm.rotation.x = THREE.MathUtils.lerp(leftForeArm.rotation.x, basePosition.foreArm.x, 0.1);
-                        leftForeArm.rotation.y = THREE.MathUtils.lerp(leftForeArm.rotation.y, basePosition.foreArm.y, 0.1);
-                        leftForeArm.rotation.z = THREE.MathUtils.lerp(leftForeArm.rotation.z, basePosition.foreArm.z, 0.1);
-                        
-                        rightForeArm.rotation.x = THREE.MathUtils.lerp(rightForeArm.rotation.x, basePosition.foreArm.x, 0.1);
-                        rightForeArm.rotation.y = THREE.MathUtils.lerp(rightForeArm.rotation.y, basePosition.foreArm.y, 0.1);
-                        rightForeArm.rotation.z = THREE.MathUtils.lerp(rightForeArm.rotation.z, basePosition.foreArm.z, 0.1);
-                        
-                        // Reset hands
-                        leftHand.rotation.x = THREE.MathUtils.lerp(leftHand.rotation.x, basePosition.hand.x, 0.1);
-                        leftHand.rotation.y = THREE.MathUtils.lerp(leftHand.rotation.y, basePosition.hand.y, 0.1);
-                        leftHand.rotation.z = THREE.MathUtils.lerp(leftHand.rotation.z, basePosition.hand.z, 0.1);
-                        
-                        rightHand.rotation.x = THREE.MathUtils.lerp(rightHand.rotation.x, basePosition.hand.x, 0.1);
-                        rightHand.rotation.y = THREE.MathUtils.lerp(rightHand.rotation.y, basePosition.hand.y, 0.1);
-                        rightHand.rotation.z = THREE.MathUtils.lerp(rightHand.rotation.z, basePosition.hand.z, 0.1);
-                        
-                        // Update all matrices
-                        leftArm.updateMatrix();
-                        rightArm.updateMatrix();
-                        leftForeArm.updateMatrix();
-                        rightForeArm.updateMatrix();
-                        leftHand.updateMatrix();
-                        rightHand.updateMatrix();
+                        ['x', 'y', 'z'].forEach(axis => {
+                            leftArm.rotation[axis] = THREE.MathUtils.lerp(leftArm.rotation[axis], neutralPosition.leftArm[axis], 0.1);
+                            rightArm.rotation[axis] = THREE.MathUtils.lerp(rightArm.rotation[axis], neutralPosition.rightArm[axis], 0.1);
+                            leftForeArm.rotation[axis] = THREE.MathUtils.lerp(leftForeArm.rotation[axis], neutralPosition.leftForeArm[axis], 0.1);
+                            rightForeArm.rotation[axis] = THREE.MathUtils.lerp(rightForeArm.rotation[axis], neutralPosition.rightForeArm[axis], 0.1);
+                            leftHand.rotation[axis] = THREE.MathUtils.lerp(leftHand.rotation[axis], neutralPosition.leftHand[axis], 0.1);
+                            rightHand.rotation[axis] = THREE.MathUtils.lerp(rightHand.rotation[axis], neutralPosition.rightHand[axis], 0.1);
+                        });
+
+                        // Update matrices
+                        [leftArm, rightArm, leftForeArm, rightForeArm, leftHand, rightHand].forEach(bone => {
+                            bone.updateMatrix();
+                        });
                     }
                     return;
                 }
 
-                const now = Date.now();
-                const time = now * 0.001;
-                const timeSinceLastGesture = now - lastGestureTime;
-
-                if (timeSinceLastGesture > gestures[currentGesture].duration) {
-                    previousTarget = { ...currentTarget };
+                const currentTime = Date.now();
+                if (currentTime - lastGestureTime > 2000) { // Change gesture every 2 seconds
+                    const availableGestures = Object.keys(gestureArrays).filter(gesture => !usedGestures.has(gesture));
                     
-                    let nextGesture;
-                    do {
-                        nextGesture = Math.floor(Math.random() * gestures.length);
-                    } while (nextGesture === currentGesture);
+                    // If all gestures have been used, reset the used gestures set
+                    if (availableGestures.length === 0) {
+                        usedGestures.clear();
+                        currentGestureCategory = Object.keys(gestureArrays)[Math.floor(Math.random() * Object.keys(gestureArrays).length)];
+                    } else {
+                        // Select a random unused gesture
+                        currentGestureCategory = availableGestures[Math.floor(Math.random() * availableGestures.length)];
+                    }
                     
-                    currentGesture = nextGesture;
-                    lastGestureTime = now;
-                    transitionProgress = 0;
-
-                    currentTarget = { ...gestures[currentGesture] };
+                    usedGestures.add(currentGestureCategory);
+                    lastGestureTime = currentTime;
+                    
+                    // Update the animation display
+                    const animationDisplay = document.getElementById('current-animation');
+                    if (animationDisplay) {
+                        animationDisplay.textContent = `Current Animation: ${currentGestureCategory}`;
+                    }
                 }
 
-                transitionProgress = Math.min(1, transitionProgress + 0.03);
-                const wristMovement = Math.sin(time * 1.5) * 0.1;
-
-                if (leftForeArm && rightForeArm && rightHand) {
-                    const ease = t => t * t * (3 - 2 * t);
-                    const t = ease(transitionProgress);
-
-                    rightForeArm.rotation.x = THREE.MathUtils.lerp(
-                        previousTarget.rightForeArm.x,
-                        currentTarget.rightForeArm.x,
-                        t
-                    );
-                    rightForeArm.rotation.y = THREE.MathUtils.lerp(
-                        previousTarget.rightForeArm.y,
-                        currentTarget.rightForeArm.y,
-                        t
-                    );
-                    rightForeArm.rotation.z = currentTarget.rightForeArm.z;
-
-                    rightHand.rotation.x = THREE.MathUtils.lerp(
-                        previousTarget.rightHand.x,
-                        currentTarget.rightHand.x + wristMovement,
-                        t
-                    );
+                // Get the current gesture
+                const targetGesture = gestureArrays[currentGestureCategory][0];
+                
+                if (leftArm && rightArm && leftForeArm && rightForeArm && leftHand && rightHand) {
+                    ['x', 'y', 'z'].forEach(axis => {
+                        leftArm.rotation[axis] = THREE.MathUtils.lerp(leftArm.rotation[axis], targetGesture.leftArm[axis], 0.1);
+                        rightArm.rotation[axis] = THREE.MathUtils.lerp(rightArm.rotation[axis], targetGesture.rightArm[axis], 0.1);
+                        leftForeArm.rotation[axis] = THREE.MathUtils.lerp(leftForeArm.rotation[axis], targetGesture.leftForeArm[axis], 0.1);
+                        rightForeArm.rotation[axis] = THREE.MathUtils.lerp(rightForeArm.rotation[axis], targetGesture.rightForeArm[axis], 0.1);
+                        leftHand.rotation[axis] = THREE.MathUtils.lerp(leftHand.rotation[axis], targetGesture.leftHand[axis], 0.1);
+                        rightHand.rotation[axis] = THREE.MathUtils.lerp(rightHand.rotation[axis], targetGesture.rightHand[axis], 0.1);
+                    });
 
                     // Update matrices
-                    leftForeArm.updateMatrix();
-                    rightForeArm.updateMatrix();
-                    rightHand.updateMatrix();
+                    [leftArm, rightArm, leftForeArm, rightForeArm, leftHand, rightHand].forEach(bone => {
+                        bone.updateMatrix();
+                    });
                 }
             }
 
@@ -1155,29 +1208,55 @@ HTML_TEMPLATE = '''
 
         // Update the voice input setup function
         function setupVoiceInput() {
-            const micButton = document.getElementById('mic-button'); // Changed to use the inline button
+            const micButton = document.getElementById('mic-button');
 
-            // Speech recognition setup
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!SpeechRecognition) {
-                micButton.innerHTML = 'Voice input not supported';
+            // Speech recognition setup with error handling and logging
+            let recognition;
+            try {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (!SpeechRecognition) {
+                    console.error('Speech Recognition API not supported in this browser');
+                    micButton.innerHTML = 'Voice input not supported';
+                    micButton.disabled = true;
+                    return;
+                }
+                recognition = new SpeechRecognition();
+            } catch (e) {
+                console.error('Speech recognition error:', e);
+                micButton.innerHTML = 'Voice input error';
                 micButton.disabled = true;
                 return;
             }
 
-            const recognition = new SpeechRecognition();
-            recognition.continuous = true;
+            // Configure recognition settings
+            recognition.continuous = false; // Changed to false to prevent multiple results
             recognition.interimResults = true;
-            recognition.lang = 'en-US';
-
+            recognition.lang = 'hi-IN'; // Set to Hindi for Hindi recognition
+            
             let isListening = false;
             let currentTranscript = '';
 
+            recognition.onstart = () => {
+                console.log('Speech recognition started');
+                isListening = true;
+                micButton.style.backgroundColor = '#ff4444';
+                micButton.innerHTML = '🎤 Release to Send';
+            };
+
+            recognition.onend = () => {
+                console.log('Speech recognition ended');
+                isListening = false;
+                micButton.style.background = 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)';
+                micButton.innerHTML = '🎤 Hold to Speak';
+            };
+
             recognition.onresult = (event) => {
+                console.log('Speech recognition result received');
                 currentTranscript = '';
                 for (const result of event.results) {
                     if (result.isFinal) {
                         currentTranscript += result[0].transcript;
+                        console.log('Final transcript:', currentTranscript);
                     }
                 }
                 
@@ -1187,52 +1266,99 @@ HTML_TEMPLATE = '''
             recognition.onerror = (event) => {
                 console.error('Speech recognition error:', event.error);
                 stopListening();
+                micButton.style.background = 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)';
+                micButton.innerHTML = '🎤 Hold to Speak';
             };
 
             function startListening() {
-                if (!isListening) {
-                    isListening = true;
-                    recognition.start();
-                    micButton.style.backgroundColor = '#ff4444';
-                    micButton.innerHTML = '🎤 Release to Send';
+                try {
+                    if (!isListening) {
+                        console.log('Starting speech recognition...');
+                        recognition.start();
+                    }
+                } catch (e) {
+                    console.error('Error starting speech recognition:', e);
                 }
             }
 
             function stopListening() {
-                if (isListening) {
-                    isListening = false;
-                    recognition.stop();
-                    micButton.style.background = 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)';
-                    micButton.innerHTML = '🎤 Hold to Speak';
-
-                    if (currentTranscript.trim()) {
-                        document.getElementById('user-input').value = currentTranscript;
-                        sendMessage();
-                        currentTranscript = '';
+                try {
+                    if (isListening) {
+                        console.log('Stopping speech recognition...');
+                        recognition.stop();
+                        
+                        if (currentTranscript.trim()) {
+                            console.log('Sending message:', currentTranscript);
+                            document.getElementById('user-input').value = currentTranscript;
+                            sendMessage();
+                            currentTranscript = '';
+                        }
                     }
+                } catch (e) {
+                    console.error('Error stopping speech recognition:', e);
                 }
             }
 
-            // Add button event listeners
-            micButton.addEventListener('mousedown', startListening);
-            micButton.addEventListener('mouseup', stopListening);
-            micButton.addEventListener('mouseleave', stopListening);
+            // Mouse events
+            micButton.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                startListening();
+            });
 
-            // Add touch support for mobile devices
+            micButton.addEventListener('mouseup', (e) => {
+                e.preventDefault();
+                stopListening();
+            });
+
+            micButton.addEventListener('mouseleave', (e) => {
+                e.preventDefault();
+                if (isListening) stopListening();
+            });
+
+            // Touch events for mobile
             micButton.addEventListener('touchstart', (e) => {
                 e.preventDefault();
                 startListening();
             });
+
             micButton.addEventListener('touchend', (e) => {
                 e.preventDefault();
                 stopListening();
             });
         }
 
-        // Add this to your initialization code
+        // Make sure to call setupVoiceInput after DOM is loaded
         document.addEventListener('DOMContentLoaded', () => {
             setupVoiceInput();
+            console.log('Voice input setup completed');
         });
+
+        // Add this after your setupArmMovements function
+        function setupAnimationTesting() {
+            const testButton = document.getElementById('test-animation-btn');
+            const animationDisplay = document.getElementById('current-animation');
+            
+            testButton.addEventListener('click', () => {
+                // Toggle speaking state
+                isSpeaking = !isSpeaking;
+                
+                if (isSpeaking) {
+                    testButton.textContent = 'Stop Animations';
+                    testButton.style.background = '#ef4444'; // Red background when active
+                } else {
+                    testButton.textContent = 'Test Animations';
+                    testButton.style.background = 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)';
+                }
+            });
+
+            // Add keyboard shortcut (spacebar)
+            document.addEventListener('keydown', (e) => {
+                if (e.code === 'Space' && !document.activeElement.tagName.toLowerCase().match(/input|textarea/)) {
+                    e.preventDefault(); // Prevent scrolling
+                    testButton.click();
+                }
+            });
+        }
     </script>
 </body>
 </html>
@@ -1264,7 +1390,7 @@ def get_response():
         except Exception as e:
             return {"response": f"क्षमा करें, एक त्रुटि हुई: {str(e)}"}
     
-    return {"response": "मुझे कोई इनपुट नहीं मिला। कृपया फिर से प्रयास करें।"}
+    return {"response": "मुझे कोई इनपुट नहीं मिला। कृपय फिर स प्रयास करें।"}
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
