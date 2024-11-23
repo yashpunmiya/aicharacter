@@ -373,9 +373,13 @@ HTML_TEMPLATE = '''
     </div>
 
     <script>
+        // Add this global variable at the start of your script (before any functions)
+        let isSpeaking = false;
+        let facialAnimations;
+
         // Scene setup
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0xf0f0f0);
+        scene.background = new THREE.Color(0xffffff); // Set to white
 
         // Get the character container dimensions
         const container = document.getElementById('character-container');
@@ -437,44 +441,17 @@ HTML_TEMPLATE = '''
         const LERP_FACTOR = 0.2;
         const EXPRESSION_SMOOTHING = 0.25;
 
-        // Enhanced phoneme and expression mapping
-        const expressionMap = {
-            // Basic expressions with multiple morphs
-            neutral: {
-                mouthOpen: 0,
-                mouthSmile: 0.1,
-                mouthRound: 0,
-                eyesClosed: 0,
-                eyebrowRaise: 0,
-                eyebrowFrown: 0
-            },
-            speaking: {
-                // Base expression while talking
-                mouthOpen: 0.2,
-                mouthSmile: 0.2,
-                eyebrowRaise: 0.2,
-                eyesClosed: 0
-            },
-            emphasis: {
-                // For emphasized words
-                eyebrowRaise: 0.4,
-                mouthSmile: 0.3
-            }
-        };
+        // Define more varied mouth shapes for speaking
+        const mouthShapes = [
+            { mouthOpen: 0.2, mouthSmile: 0.1, mouthRound: 0.1 },  // slight open
+            { mouthOpen: 0.4, mouthSmile: 0.2, mouthRound: 0.2 },  // medium open
+            { mouthOpen: 0.7, mouthSmile: 0.1, mouthRound: 0.1 },  // wide open
+            { mouthOpen: 0.3, mouthSmile: 0.4, mouthRound: 0.1 },  // smile speak
+            { mouthOpen: 0.5, mouthSmile: 0.1, mouthRound: 0.6 },  // round O shape
+            { mouthOpen: 0.1, mouthSmile: 0.2, mouthRound: 0.1 },  // nearly closed
+        ];
 
-        const phonemeMap = {
-            'A': { mouthOpen: 0.7, mouthSmile: 0.2, mouthRound: 0.1, eyebrowRaise: 0.1 },
-            'B': { mouthOpen: 0.3, mouthSmile: 0.1, mouthRound: 0.2, eyebrowRaise: 0 },
-            'O': { mouthOpen: 0.8, mouthSmile: 0, mouthRound: 0.8, eyebrowRaise: 0.1 },
-            'closed': { mouthOpen: 0.1, mouthSmile: 0.1, mouthRound: 0.1, eyebrowRaise: 0 }
-        };
-
-        // Add this state tracking
-        let isSpeaking = false;
-        let currentAnimation = null;
-        let facialAnimations = null;
-
-        // Updated facial animation setup
+        // Update the facial animation setup function
         function setupFacialAnimations(character) {
             let faceMeshes = [];
             let currentState = {
@@ -485,28 +462,42 @@ HTML_TEMPLATE = '''
                 eyesClosed: 0
             };
             let targetState = { ...currentState };
+            let lastMouthUpdate = Date.now();
+            let currentMouthShape = 0;
             
             // Find meshes with morph targets
             character.traverse((node) => {
                 if (node.morphTargetDictionary) {
                     faceMeshes.push(node);
-                    console.log('Found morph targets:', node.morphTargetDictionary);
                 }
             });
 
-            const phonemeMap = {
-                'A': { mouthOpen: 1.0, mouthSmile: 0.3, mouthRound: 0.1, eyebrowRaise: 0.2 },
-                'E': { mouthOpen: 0.8, mouthSmile: 0.7, mouthRound: 0.1, eyebrowRaise: 0.3 },
-                'I': { mouthOpen: 0.6, mouthSmile: 0.8, mouthRound: 0.1, eyebrowRaise: 0.2 },
-                'O': { mouthOpen: 0.9, mouthSmile: 0.1, mouthRound: 0.9, eyebrowRaise: 0.2 },
-                'U': { mouthOpen: 0.7, mouthSmile: 0.1, mouthRound: 0.8, eyebrowRaise: 0.2 },
-                'closed': { mouthOpen: 0.1, mouthSmile: 0.1, mouthRound: 0.1, eyebrowRaise: 0 }
-            };
-
             function updateFacialExpression(delta) {
-                if (!isSpeaking && !isTransitioning()) return;
+                if (!isSpeaking && !isTransitioning()) {
+                    // Return to neutral position when not speaking
+                    targetState = {
+                        mouthOpen: 0.1,
+                        mouthSmile: 0.1,
+                        mouthRound: 0.1,
+                        eyebrowRaise: 0,
+                        eyesClosed: 0
+                    };
+                } else if (isSpeaking) {
+                    // Update mouth shape every 100-200ms for natural variation
+                    const now = Date.now();
+                    if (now - lastMouthUpdate > 100 + Math.random() * 100) {
+                        // Randomly select next mouth shape
+                        currentMouthShape = Math.floor(Math.random() * mouthShapes.length);
+                        targetState = {
+                            ...mouthShapes[currentMouthShape],
+                            eyebrowRaise: Math.random() * 0.3,  // Random eyebrow movement
+                            eyesClosed: 0
+                        };
+                        lastMouthUpdate = now;
+                    }
+                }
 
-                // Increased interpolation speed from 10 to 15
+                // Smooth interpolation to target state
                 Object.keys(currentState).forEach(key => {
                     currentState[key] = THREE.MathUtils.lerp(
                         currentState[key],
@@ -515,12 +506,12 @@ HTML_TEMPLATE = '''
                     );
                 });
 
-                // Increased subtle movement frequency from 8 to 10
+                // Add subtle random movements during speech
                 if (isSpeaking) {
                     const time = Date.now() * 0.001;
-                    const subtleMovement = Math.sin(time * 10) * 0.1;
+                    const subtleMovement = Math.sin(time * 10) * 0.05;
                     currentState.mouthOpen += subtleMovement;
-                    currentState.eyebrowRaise += subtleMovement * 0.3;
+                    currentState.eyebrowRaise += subtleMovement * 0.2;
                 }
 
                 // Apply to all face meshes
@@ -542,19 +533,19 @@ HTML_TEMPLATE = '''
 
             return {
                 update: updateFacialExpression,
-                setPhoneme: (phoneme) => {
-                    if (phonemeMap[phoneme]) {
-                        targetState = { ...phonemeMap[phoneme] };
-                    }
-                },
                 startSpeaking: () => {
                     isSpeaking = true;
-                    // Start with slightly open mouth
-                    targetState = phonemeMap['closed'];
+                    lastMouthUpdate = 0; // Force immediate mouth shape update
                 },
                 stopSpeaking: () => {
                     isSpeaking = false;
-                    targetState = { ...phonemeMap['closed'] };
+                    targetState = {
+                        mouthOpen: 0.1,
+                        mouthSmile: 0.1,
+                        mouthRound: 0.1,
+                        eyebrowRaise: 0,
+                        eyesClosed: 0
+                    };
                 }
             };
         }
@@ -616,6 +607,9 @@ HTML_TEMPLATE = '''
                 character = gltf.scene;
                 scene.add(character);
 
+                // Set initial background color to white
+                renderer.setClearColor(0xffffff);
+
                 // Debug: Log initial bone rotations
                 character.traverse((node) => {
                     if (node.type === 'Bone' && (node.name === 'Head' || node.name === 'Neck')) {
@@ -646,7 +640,16 @@ HTML_TEMPLATE = '''
                 camera.position.set(center.x, center.y + 0.5, center.z + 2);
                 controls.update();
 
+                // Start animation loop only after character is loaded
                 animate();
+            },
+            // Add loading progress callback
+            function (xhr) {
+                console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            // Add error callback
+            function (error) {
+                console.error('An error occurred loading the character:', error);
             }
         );
 
@@ -813,45 +816,19 @@ HTML_TEMPLATE = '''
                     
                     if (facialAnimations) {
                         let animationFrame;
-                        let lastStateChange = Date.now();
                         
-                        const animate = () => {
-                            if (!isSpeaking) return;
-
-                            const now = Date.now();
-                            const currentState = speechAnimator.states[speechAnimator.currentState];
-                            
-                            // Check if it's time to transition to next state
-                            if (now - lastStateChange > currentState.maxDuration) {
-                                speechAnimator.currentState = speechAnimator.getNextState();
-                                lastStateChange = now;
-                            }
-
-                            // Get base values and add variations
-                            const values = speechAnimator.addVariation(currentState.values);
-                            
-                            // Add blink value
-                            values.eyesClosed = speechAnimator.updateBlink();
-                            
-                            facialAnimations.setPhoneme(values);
-
-                            animationFrame = requestAnimationFrame(animate);
-                        };
-
                         audio.onplay = () => {
                             isSpeaking = true;
-                            speechAnimator.currentState = 'startTalk';
-                            lastStateChange = Date.now();
-                            animate();
+                            if (facialAnimations.startSpeaking) {
+                                facialAnimations.startSpeaking();
+                            }
                         };
 
                         audio.onended = () => {
                             isSpeaking = false;
-                            cancelAnimationFrame(animationFrame);
-                            
-                            // Smooth transition to neutral
-                            speechAnimator.currentState = 'neutral';
-                            facialAnimations.setPhoneme(speechAnimator.states.neutral.values);
+                            if (facialAnimations.stopSpeaking) {
+                                facialAnimations.stopSpeaking();
+                            }
                         };
                     }
                     
